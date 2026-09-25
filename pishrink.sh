@@ -105,18 +105,20 @@ cat <<'EOFRC' > "$mountdir/etc/rc.local"
 do_expand_rootfs() {
   ROOT_PART=$(mount | sed -n 's|^/dev/\(.*\) on / .*|\1|p')
 
-  PART_NUM=${ROOT_PART#mmcblk0p}
-  if [ "$PART_NUM" = "$ROOT_PART" ]; then
+  if [[ "$ROOT_PART" =~ ^(mmcblk[0-9]+)p([0-9]+)$ ]]; then
+    DEV_PART=${BASH_REMATCH[1]}
+    PART_NUM=${BASH_REMATCH[2]}
+  else
     echo "$ROOT_PART is not an SD card. Don't know how to expand"
     return 0
   fi
 
   # Get the starting offset of the root partition
-  PART_START=$(parted /dev/mmcblk0 -ms unit s p | grep "^${PART_NUM}" | cut -f 2 -d: | sed 's/[^0-9]//g')
+  PART_START=$(parted "/dev/$DEV_PART" -ms unit s p | grep "^${PART_NUM}" | cut -f 2 -d: | sed 's/[^0-9]//g')
   [ "$PART_START" ] || return 1
   # Return value will likely be error for fdisk as it fails to reload the
   # partition table because the root fs is mounted
-  fdisk /dev/mmcblk0 <<EOF
+  fdisk "/dev/$DEV_PART" <<EOF
 p
 d
 $PART_NUM
